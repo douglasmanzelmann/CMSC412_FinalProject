@@ -1,8 +1,11 @@
+import com.sun.org.glassfish.external.statistics.Stats;
+
 import javax.swing.*;
 import javax.swing.border.EtchedBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.List;
 import java.util.concurrent.*;
 
 /**
@@ -20,13 +23,20 @@ public class SimulationGui {
 
     // Start / Stop Buttons
     private JPanel startStopPanel = new JPanel();
-    private JButton startSimulationButton = new JButton();
-    private JButton stopSimulationButton = new JButton();
+    private JButton startSimulationButton = new JButton("Start Simulation");
+    private JButton stopSimulationButton = new JButton("Stop Simulation");
 
-    // Text area to display processes and stats
+    // JList to display processes
     private DefaultListModel<Process> processDefaultListModel = new DefaultListModel<>();
     private JList<Process> processJList = new JList<>(processDefaultListModel);
     private JScrollPane displayScrollPane = new JScrollPane(processJList);
+
+
+    // JList to display stats
+    private DefaultListModel<String> statsDefaultListModel = new DefaultListModel<>();
+    private JList<String> statsJList = new JList<>(statsDefaultListModel);
+    private JScrollPane statsScrollPane = new JScrollPane(statsJList);
+
     private JPanel contentPanel = new JPanel(new BorderLayout());
 
     private boolean systemRunning = false;
@@ -58,6 +68,7 @@ public class SimulationGui {
 
         contentPanel.add(mainPanel, BorderLayout.PAGE_START);
         contentPanel.add(displayScrollPane, BorderLayout.CENTER);
+        contentPanel.add(statsScrollPane, BorderLayout.AFTER_LAST_LINE);
 
         startSimulationButton.addActionListener(new ActionListener() {
             @Override
@@ -67,6 +78,13 @@ public class SimulationGui {
                 // or have one selected by default.
 
                 startSimulation();
+            }
+        });
+
+        stopSimulationButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                stopSimulation();
             }
         });
     }
@@ -106,16 +124,20 @@ public class SimulationGui {
         ProcessGeneratorWorker processGeneratorWorker =
                 new ProcessGeneratorWorker(selectedScheduler);
         processGeneratorWorker.execute();
+    }
 
+    public void stopSimulation() {
+        systemRunning = false;
     }
 
     private class ProcessGeneratorWorker extends SwingWorker<Void, Process> {
-        private SchedulerInterface scheduler;
+        private Scheduler scheduler;
         private ExecutorService schedulerThread;
+        private StatsWorker statsWorker;
 
         private ScheduledExecutorService scheduledExecutorService;
         private final int MIN_INTERVAL = 1;
-        private final int MAX_INTERVAL = 5000;
+        private final int MAX_INTERVAL = 500;
         private final int RANGE = MAX_INTERVAL - MIN_INTERVAL;
 
 
@@ -128,10 +150,9 @@ public class SimulationGui {
 
         @Override
         protected Void doInBackground() throws Exception {
-            schedulerThread.execute(scheduler);
+            Future<java.util.List<Future<Process>>> futureListFuture = schedulerThread.submit(scheduler);
             while (systemRunning) {
                 int delay = (int)(Math.random() * RANGE) + MIN_INTERVAL;
-                System.out.println("delay: " + delay);
                 ScheduledFuture<Process> scheduledFuture =
                         scheduledExecutorService.schedule(
                                 new ProcessGenerator(),
@@ -141,18 +162,68 @@ public class SimulationGui {
                 Process process = scheduledFuture.get();
                 publish(process);
 
-                //scheduler.addToReadyQueue(process);
+                scheduler.addToReadyQueue(process);
             }
+            scheduler.stop();
 
             scheduledExecutorService.shutdown();
+            schedulerThread.shutdown();
+
+            statsWorker = new StatsWorker(futureListFuture);
+            statsWorker.execute();
+
             return null;
         }
 
         @Override
         protected void process(java.util.List<Process> processes) {
-            System.out.println("in process");
             for (Process process : processes)
                 processDefaultListModel.addElement(process);
+        }
+
+        @Override
+        protected void done() {
+            try {
+                this.get();
+            } catch (InterruptedException | ExecutionException e ) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private class StatsWorker extends SwingWorker<Void, String> {
+        Future<List<Future<Process>>> processedProcesses;
+        SchedulerStats schedulerStats;
+
+        public StatsWorker(Future<List<Future<Process>>> processedProcesses) {
+            this.processedProcesses = processedProcesses;
+            schedulerStats = new SchedulerStats();
+        }
+
+        @Override
+        protected Void doInBackground() {
+            try {
+                List<Future<Process>> listOfFutureProcesses = processedProcesses.get();
+                for (Future<Process> fp : listOfFutureProcesses) {
+                    schedulerStats.addProcess(fp.get());
+                }
+            } catch (InterruptedException | ExecutionException e) { e.printStackTrace(); }
+
+            publish("Total Number of Processes: " + schedulerStats.getNumberOfProcesses());
+            publish("Minimum Total Time: " + schedulerStats.getMinimumTotalTime());
+            publish("Maximum Total Time: " + schedulerStats.getMaximumTotalTime());
+            publish("Average Total Time: " + schedulerStats.getAverageTotalTime());
+
+            publish("Average Wait Time: " + schedulerStats.getAverageWaitTime());
+            publish("Average Turn Around Time: " + schedulerStats.getAverageTurnAroundTime());
+            return null;
+        }
+
+        @Override
+        protected void process(List<String> stats) {
+            for (String stat : stats) {
+                statsDefaultListModel.addElement(stat);
+            }
         }
 
         @Override

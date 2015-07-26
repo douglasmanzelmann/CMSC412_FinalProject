@@ -6,4 +6,5 @@ import java.util.concurrent.Callable;
 public interface SchedulerInterface {
     boolean addToReadyQueue(Process process);
     boolean addToIOQueue(Process process);
+    void stop();
 }

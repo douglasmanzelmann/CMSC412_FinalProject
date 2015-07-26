@@ -2,7 +2,7 @@
  * Created by dmanzelmann on 7/24/2015.
  */
 public class SchedulerFactory {
-    public static SchedulerInterface createScheduler(String type) {
+    public static Scheduler createScheduler(String type) {
         if (type.equals("FCFS"))
             return new FCFSScheduler();
 
