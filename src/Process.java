@@ -3,7 +3,7 @@ import java.util.concurrent.Callable;
 /**
  * Created by test on 7/22/2015.
  */
-public class Process implements Callable<Void> {
+public class Process implements Callable<Process> {
     private static int count = 0;
 
     private int id;
@@ -14,11 +14,15 @@ public class Process implements Callable<Void> {
         id = ++count;
     }
 
-    public Void call() {
+    public Process call() {
         try {
             Thread.sleep(serviceTime);
         } catch (InterruptedException e) { e.printStackTrace(); }
 
-        return null;
+        return this;
+    }
+
+    public String toString() {
+        return "Process ID: " + id;
     }
 }

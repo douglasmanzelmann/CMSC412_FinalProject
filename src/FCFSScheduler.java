@@ -1,16 +1,14 @@
-import sun.awt.image.ImageWatched;
-
 import java.util.Queue;
 import java.util.concurrent.*;
 
 /**
  * Created by test on 7/22/2015.
  */
-public class FCFSScheduler implements Scheduler {
+public class FCFSScheduler implements SchedulerInterface {
     private LinkedBlockingQueue<Process> readyQueue;
     private Queue<Process> ioQueue;
     private ExecutorService workerExecutor;
-    private ExecutorCompletionService<Void> workerThreads;
+    private ExecutorCompletionService<Process> workerThreads;
     private ExecutorService ioExecutor;
     private ExecutorCompletionService<Process> ioThreads;
     private ExecutorService intermediateExecutor;
@@ -39,11 +37,28 @@ public class FCFSScheduler implements Scheduler {
 
     public boolean addToReadyQueue(Process process) {
         readyQueue.add(process);
+        return true;
     }
 
     public boolean addToIOQueue(Process process) {
 
+        return true;
     }
+
+    public Void call() {
+        while (!workerExecutor.isShutdown()) {
+            if (readyQueue.peek() != null) {
+                workerThreads.submit(readyQueue.poll());
+            }
+
+            if (ioQueue.peek() != null) {
+                ioThreads.submit(ioQueue.poll());
+            }
+        }
+
+        return null;
+    }
+
 
     public void run() {
         running = true;

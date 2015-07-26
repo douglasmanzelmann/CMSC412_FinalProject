@@ -1,7 +1,9 @@
+import java.util.concurrent.Callable;
+
 /**
  * Created by test on 7/22/2015.
  */
-public interface Scheduler {
+public interface SchedulerInterface {
     boolean addToReadyQueue(Process process);
     boolean addToIOQueue(Process process);
 }
